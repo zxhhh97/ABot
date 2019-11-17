@@ -117,3 +117,7 @@ midfile/
 twitter_network/
 test_dataset/
 
+*.csv
+*.index
+*.mm
+*.dict
