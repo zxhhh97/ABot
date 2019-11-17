@@ -51,7 +51,12 @@ class ProNE(BaseModel):
         print("sparse NE time", t_2 - t_1)
         print("spectral Pro time", t_3 - t_2)
         self.embeddings = embeddings_matrix
-
+        list_nodes=list(G.nodes())
+        
+        for vid, node in enumerate(G.nodes()):
+            if np.all(self.embeddings[vid])==0:
+                lis_emb=[self.embeddings[list_nodes.index(n)]for n in G.predecessors(node)]
+                self.embeddings[vid]=np.mean(lis_emb,axis=0)
         return self.embeddings
 
     def _get_embedding_rand(self, matrix):
@@ -64,7 +69,7 @@ class ProNE(BaseModel):
             smat, n_components=self.dimension, n_iter=5, random_state=None
         )
         U = U * np.sqrt(Sigma)
-        U = preprocessing.normalize(U, "l2")
+        U = preprocessing.normalize(U, "l2")   
         print("sparsesvd time", time.time() - t1)
         return U
 

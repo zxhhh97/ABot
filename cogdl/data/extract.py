@@ -5,6 +5,7 @@ import tarfile
 import zipfile
 import bz2
 import gzip
+import rarfile
 
 
 def maybe_log(path, log=True):
@@ -53,3 +54,9 @@ def extract_gz(path, folder, log=True):
     with gzip.open(path, 'r') as r:
         with open(osp.join(folder, '.'.join(path.split('.')[:-1])), 'wb') as w:
             w.write(r.read())
+
+
+def extract_rar(path, folder, log=True):
+    maybe_log(path, log)
+    with rarfile.RarFile(path,'r') as f:
+        f.extractall(folder)
