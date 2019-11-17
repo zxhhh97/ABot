@@ -52,7 +52,7 @@ class bot_follow(object):
                 scoredict[name]=-1
                 print('name:',name,'node: None')
         #min_sco=max(0.5,np.median(list(scoredict.values())))
-        min_sco=0.2
+        min_sco=0.2r
         for k,v in scoredict.items():
             recomdict[k]=0
             if v>min_sco:

@@ -38,7 +38,7 @@ def register_model(name):
             )
         MODEL_REGISTRY[name] = cls
         return cls
-
+    
     return register_model_cls
 
 

@@ -110,3 +110,14 @@ venv.bak/
 cogdl/data/**/*
 !cogdl/data/*
 train_single.py
+
+# txt
+*.txt
+*.npy
+
+pre_data/
+midfile/
+*.rar
+twitter_network/
+test_dataset/
+

@@ -46,19 +46,26 @@ def seperate_data(input_list,time_list,sep_point=3):
 
 def gen_node_pairs(edgelist, time_stamp,time):
     dict_time={}
+    nodes=set()
     for i,e in enumerate(edgelist):
         dict_time[tuple(e)]=time_stamp[i]
+        if time_stamp[i]<=time:
+            nodes.add(e[0])
+            nodes.add(e[1])
+    print(len(nodes))
+    print(len(edgelist))
     cnt_T=[]
     cnt_F=[]
     for i,t in enumerate(time_stamp):
-        u,v=(edgelist[i])
+        u,v=edgelist[i]
         stamp=dict_time.get((v,u),-2)
-        if t<=time:
-            if stamp>time:
+        if (t==time+1 or (time==-1 and t==3)) and u in nodes and v in nodes and (v,u) not in cnt_T:
+            if stamp>t:
                 cnt_T.append((u,v))
             elif stamp<-1:
                 cnt_F.append((u,v))
     cnt_F=random.sample(cnt_F,len(cnt_T))
+    print(len(cnt_T),len(cnt_F))
     return (cnt_T,cnt_F)
 
 
@@ -117,6 +124,8 @@ class ToFollow2(LinkPrediction):
         self.patience = args.patience
         self.max_epoch = args.max_epoch
         self.sep_point=args.sep_point
+
+        print(self.sep_point)
         edge_list = self.data.edge_index.cpu().numpy()
         edge_attr = self.data.edge_attr.cpu().numpy()[0]
         edge_list = list(zip(edge_list[0], edge_list[1]))
@@ -147,7 +156,7 @@ class ToFollow2(LinkPrediction):
         for vid, node in enumerate(G.nodes()):
             embs[node] = embeddings[vid]
         np.save(pwd,embs) 
-    
+
         roc_auc, f1_score, pr_auc = evaluate(embs, self.test_data[0], self.test_data[1])
         print(
             f"Test ROC-AUC = {roc_auc:.4f}, F1 = {f1_score:.4f}, PR-AUC = {pr_auc:.4f}"
