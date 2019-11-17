@@ -12,7 +12,16 @@ import networkx as nx
 
 class bot_follow(object):
     def __init__(self):
-        pass
+        self.rootpath='./BotProject/pre_data'
+        self.G,_,_=self.get_graph()
+        print('begin nodes()')
+        self.nodes=self.G.nodes()
+        print('begin name2node')
+        self.name2node,self.node2name=self.get_name2node()
+        print('begin embs')
+        self.embs=self.get_embs()
+        print('get Nodes')
+        self.Nodes=self.embs.keys()
 
     def to_jsonstr(self, json_data):
         json_obj = {}
@@ -23,9 +32,9 @@ class bot_follow(object):
         return json_str
 
     def check_name(self,node,embs):
-        #user_map=self.get_name2node()  # return dict:{'aaa'=123
-        embs=self.get_embs()
-        if  node in embs:
+        user_map,_=self.get_name2node()  # return dict:{'aaa'=123
+        #embs=self.get_embs()
+        if  node in user_map.values():
             return True
         else:
             return False
@@ -33,21 +42,30 @@ class bot_follow(object):
     def get_score_dict(self,embs,user_map,bot_node,name_list):
         #user_map=self.get_name2node()  # return dict:{'aaa'=123
         scoredict={}
+        recomdict={}
         for name in name_list:
             node=user_map[name]
             if self.check_name(node,embs):
                 scoredict[name]=round(float(self.get_score(embs,bot_node,node)),4)
+                print('name:',name,'node:',node)
             else:
                 scoredict[name]=-1
-        return scoredict
+                print('name:',name,'node: None')
+        #min_sco=max(0.5,np.median(list(scoredict.values())))
+        min_sco=0.2
+        for k,v in scoredict.items():
+            recomdict[k]=0
+            if v>min_sco:
+                recomdict[k]=1
+        return (scoredict,recomdict)
 
     def get_name2node(self):
         file1='user_map.txt'
         file2='user_list.txt'
-        print(os.path.abspath('.'))
-        file1=os.path.join('./BotProject/pre_data',file1)
-        file2=os.path.join('./BotProject/pre_data',file2)
+        file1=os.path.join(self.rootpath,file1)
+        file2=os.path.join(self.rootpath,file2)
         name2node={}
+        node2name={}
         id2node={}
         with open(file2,'r') as f:
             i=0
@@ -65,13 +83,14 @@ class bot_follow(object):
                 tmp=line.strip().split(' ')
                 if tmp[0] in id2node:
                     name2node[tmp[1]]=id2node[tmp[0]]
+                    node2name[id2node[tmp[0]]]= tmp[1]
                 else:
                     name2node[tmp[1]]=None
-        return name2node #{"name"='node_id'}
+        return (name2node,node2name) #{"name"='node_id'}
         
     def get_embs(self,filename='embs.npy'):
         #filename='embs.npy'
-        pwd=os.path.join('./BotProject/pre_data/',filename)
+        pwd=os.path.join(self.rootpath,filename)
         embs=np.load(pwd,allow_pickle=True)
         embs=embs.item()
         return embs
@@ -82,35 +101,31 @@ class bot_follow(object):
         return np.dot(vector1, vector2) / (
             np.linalg.norm(vector1) * np.linalg.norm(vector2))
     
-    def get_label(self,G_now,G_future,bot,node):
+    def get_label(self,G,bot,node):
         lbl = 0
-        #node=user_map[name]
-        #bot=user_map[bot]
-        if node in list(G_future.predecessors(bot)):
+        if node in list(G.predecessors(bot)):
             lbl=1
-        #current_state=get_description(G_now,bot,node)
-        #future_state=get_description(G_future,bot,node)
-        #result=[lbl,current_state,future_state]
         result = lbl
         return result
     
     def get_graph(self,filename='graph_cb.txt'):
         #filename='graph_cb.txt'
-        path=os.path.join('./BotProject/pre_data',filename)
-        G_now=nx.DiGraph()
-        G_future=nx.DiGraph()
+        path=os.path.join(self.rootpath,filename)
+        #G_now=nx.DiGraph()
+        #G_future=nx.DiGraph()
         G=nx.DiGraph()
         itr_graph = self.__read_graph(path)
         edge_label = np.array(list(itr_graph))
         G.add_edges_from(zip(edge_label[:,0],edge_label[:,1]))
-        print('total edge number:',G.number_of_nodes())
-        for n1,n2,t in edge_label:
-            if t==1:
-                G_now.add_edge(n1,n2)
-            else:
-                G_future.add_edge(n1,n2)  
-        return (G_now, G_future)
-        print('edge number at time=1:',G_now.number_of_edges(),'\nedge number at time>1:',G_future.number_of_edges())
+        print('total nodes number:',G.number_of_nodes())
+        #for n1,n2,t in edge_label:
+        #    if t==1:
+        #        G_now.add_edge(n1,n2)
+        #    else:
+        #        G_future.add_edge(n1,n2)  
+        #print('edge number at time=1:',G_now.number_of_edges(),'\nedge number at time>1:',G_future.number_of_edges())
+        #return (G,G_now, G_future)
+        return (G,0,0)
 
     
     def __read_graph(self,path):

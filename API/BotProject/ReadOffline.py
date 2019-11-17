@@ -7,6 +7,7 @@ import os.path as osp
 import os
 from pprint import pprint
 import time
+import pandas as pd
 from itertools import count,islice
 from collections import defaultdict,Counter
 import networkx as nx
@@ -14,20 +15,136 @@ import networkx as nx
 #from gensim.test.utils import common_corpus, common_dictionary, get_tmpfile
 import numpy as np
 import random
-import networkx as nx
+
+
+class read_graph(object):
+    def __init__(self,rootpath='./BotProject/pre_data',g_file='graph_cb.txt',usermap='user_map.txt',userlist='user_list.txt'):
+        self.rootpath=rootpath       
+        self.files={"graph":g_file,"name2id":usermap,"id2node":userlist}
+        self.G_now,self.G_future,self.G=self.graphs()
+        self.name2node=self.get_name2node()
+        self.embs=self.load_embs()
+
+    def __read_graph(self,path):
+        with open(path,'r') as f:
+            for line in f:
+                if line:
+                    yield list(map(int,line.strip('\n').split()))
+
+    def graphs(self):
+        #filename='graph_cb.txt'
+        path=os.path.join(self.rootpath,self.files["graph"])
+        G_now=nx.DiGraph()
+        G_future=nx.DiGraph()
+        G=nx.DiGraph()
+
+        itr_graph = self.__read_graph(path)
+        edge_label = np.array(list(itr_graph))
+        G.add_edges_from(zip(edge_label[:,0],edge_label[:,1]))
+        print('total edge number:',G.number_of_nodes())
+        for n1,n2,t in edge_label:
+            if t==1:
+                G_now.add_edge(n1,n2)
+            else:
+                G_future.add_edge(n1,n2)  
+        print('edge number at time=1:',G_now.number_of_edges(),
+        '\nedge number at time>1:',G_future.number_of_edges())
+        return (G_now, G_future,G)
+
+    def get_name2node(self):
+        print(os.path.abspath('.'))
+        file_name2id=os.path.join(self.rootpath,self.files['name2id'])
+        file_id2node=os.path.join(self.rootpath,self.files['id2node'])
+        id2node={}
+        node2name={}
+        name2node={}
+        print('begin reading:',file_id2node)
+        with open(file_id2node,'r') as f:
+            i=0
+            while True:
+                line=f.readline()
+                if not line:
+                    break
+                id2node[line.strip()]=i
+                i+=1
+        print('begin reading:',file_name2id)
+        with open(file_name2id,'r') as f:
+            while True:
+                line=f.readline()
+                if not line:
+                    break
+                tmp=line.strip().split(' ')
+                if tmp[0] in id2node:
+                    name2node[tmp[1]]=id2node[tmp[0]]
+                    node2name[id2node[tmp[0]]]=tmp[1]
+                else:
+                    name2node[tmp[1]]=None
+        return name2node #{"name"='node_id'}
+
+    #def query(self,df,value,src):
+    #    return df.loc[df[src[0]]==value,src[1]].values[0]
+
+    def gen_true_edges(self,dic):
+        nodes=dic.keys() #content dic
+        #nodes=self.df['node'].values
+        G=self.G_future
+        G2=self.G_now
+        candidates=set(list(G2.nodes()))
+        edges=list(G.edges())
+        tmp_list=[]
+        #all_flag = False
+        for n1,n2 in edges:
+            if n1 in nodes and n2 in nodes:
+                if dic[n1] and dic[n2] and n1 in candidates and n2 in candidates and (n2,n1) not in tmp_list:
+                    tmp_list.append((n1,n2))
+        return tmp_list
+
+    def gen_pure_edges(self,dic):
+        nodes=dic.keys() #content dic
+        G=self.G
+        edges=list(G.edges())
+        tmp_list=[]
+        for n1,n2 in edges:
+            if n1 in nodes and n2 in nodes:
+                if dic[n1] and dic[n2]:
+                    tmp_list.append((n1,n2))
+        return tmp_list
+    
+
+    def randomly_choose_false_edges(self,dic,num=100):
+        true_edges=self.G.edges()
+        nodes=list(dic.keys())
+        tmp_list = list()
+        all_flag = False
+        for _ in range(num):
+            trial = 0
+            while True:
+                x = nodes[random.randint(0, len(nodes) - 1)]
+                y = nodes[random.randint(0, len(nodes) - 1)]
+                trial += 1
+                if trial >= 1000:
+                    all_flag = True
+                    break
+                if x != y and (x, y) not in true_edges and (y, x) not in true_edges and not (x,y) in tmp_list and (y,x) not in tmp_list :
+                    if x in self.embs and y in self.embs:
+                        tmp_list.append((x, y))
+                    break
+            if all_flag:
+                break
+        return tmp_list
+    
+    def load_embs(self):
+        pwd=os.path.join(self.rootpath,'embs.npy') 
+        embs=np.load(pwd,allow_pickle=True)
+        embs=embs.item()
+        return embs
 
 class read_tweet(object):
     def __init__(self,rootpath='./BotProject/pre_data',min_tf=2):
-        filename = "Tweets-withoutwords/2010_10_14/tweet_result_0_.txt"
-        self.path_sample_text=osp.join(rootpath,filename)
         self.path_table=osp.join(rootpath,"WordTable.txt")
         self.rootpath=rootpath
-        #self.start=start
-        #self.end=end
         self.min_tf=min_tf
         self.read_wordtable()
-        self.name2node=self.get_name2node()
-        
         
     def __iter_txtfiles(self,path="Tweets-withoutwords/"):
         rootpath=osp.join(self.rootpath,path)
@@ -70,9 +187,13 @@ class read_tweet(object):
         print('num_words:',len(self.id2tf))
         print('get wordtable dic:id2tf, word2tf, id2word')
         
+    def __iter_text2(self,path):
+        with open(path, 'rb') as f:
+            for line in f:
+                yield str(line).lstrip("b'").rstrip("\\r\\n'").strip()
     ## called by dic_contents        
     def __iter_block(self,path):
-        itr=self.__iter_text(path)
+        itr=self.__iter_text2(path)
         for text in itr:
             if not text == '':
                 block=[text] #block[0]=name
@@ -82,40 +203,22 @@ class read_tweet(object):
                         yield (block[0],block[6]) # name & content
                         break
    
-    def dic_contents(self,num_files=None):
-        name_content = defaultdict(list)
+
+    def dic_contents(self,name2node,num_files=None):
+        node_content = defaultdict(list)
         filefolder=islice(self.__iter_txtfiles(),0,num_files)
         print('-----Read tweets .txt-----')
-        filefolder=[self.path_sample_text]
         start = time.perf_counter()
         for path in filefolder:
             print('Reading:',path)
             sample= islice(self.__iter_block(path),0,None)
             for k,v in sample:
-                if k in self.name2node:
+                if k in name2node:
                     if v==['']:
                         v=[]
-                    else:
-                        v=[int(x) for x in v]
-                    name_content[self.name2node[k]]+=v
-                print('processing time:',time.perf_counter()-start)
-        print('-----End of reading tweets-----')
-        return name_content
-
-    def dic_contents_sample(self,num_files=None):
-        node_content = defaultdict(list)
-        filefolder=islice(self.__iter_txtfiles(),0,num_files)
-        print('-----Read tweets .txt-----')
-        #filefolder=[self.path_sample_text]
-        start = time.perf_counter()
-        for path in filefolder:
-            sample= islice(self.__iter_block(path),0,None)
-            for k,v in sample:
-                if k in self.name2node:
-                    if v==['']:
-                        v=[]
-                    node_content[self.name2node[k]]+=v
+                    node_content[name2node[k]]+=v
             print('processing time:',time.perf_counter()-start)
+        print('-----End of reading tweets-----')
         return node_content
 
     def __count_word(self,word_list,n=10):
@@ -124,66 +227,3 @@ class read_tweet(object):
         cont=[(self.id2newid[cnt[0]],cnt[1]) for cnt in cont if cnt[0] in self.id2tf]
         return cont
     
-    def dic_content2tf(self,num_files=None,num_features=10):
-        print('num_files=',num_files)
-        name_ct=self.dic_contents(num_files=num_files)
-        node_tf=defaultdict(list)
-        for k,v in name_ct.items():
-            node_tf[k]=self.__count_word(v,n=num_features)
-        print('number of users:',len(node_tf))
-        return node_tf
-    
-    def get_graph(self,filename='graph_cb.txt'):
-        #filename='graph_cb.txt'
-        path=os.path.join(self.rootpath,filename)
-        G_now=nx.DiGraph()
-        G_future=nx.DiGraph()
-        G=nx.DiGraph()
-        itr_graph = self.__read_graph(path)
-        edge_label = np.array(list(itr_graph))
-        G.add_edges_from(zip(edge_label[:,0],edge_label[:,1]))
-        print('total edge number:',G.number_of_nodes())
-        for n1,n2,t in edge_label:
-            if t==1:
-                G_now.add_edge(n1,n2)
-            else:
-                G_future.add_edge(n1,n2)  
-        print('edge number at time=1:',G_now.number_of_edges(),'\nedge number at time>1:',G_future.number_of_edges())
-        return (G_now, G_future)
-
-    
-    def __read_graph(self,path):
-        with open(path,'r') as f:
-            for line in f:
-                if line:
-                    yield list(map(int,line.strip('\n').split()))
-
-    def get_name2node(self):
-        file1='user_map.txt'
-        file2='user_list.txt'
-        print(os.path.abspath('.'))
-        file1=os.path.join(self.rootpath,file1)
-        file2=os.path.join(self.rootpath,file2)
-        name2node={}
-        id2node={}
-        node2name={}
-        with open(file2,'r') as f:
-            i=0
-            while True:
-                line=f.readline()
-                if not line:
-                    break
-                id2node[line.strip()]=i
-                i+=1
-        with open(file1,'r') as f:
-            while True:
-                line=f.readline()
-                if not line:
-                    break
-                tmp=line.strip().split(' ')
-                if tmp[0] in id2node:
-                    name2node[tmp[1]]=id2node[tmp[0]]
-                    node2name[id2node[tmp[0]]]=tmp[1]
-                else:
-                    name2node[tmp[1]]=None
-        return name2node #{"name"='node_id'}

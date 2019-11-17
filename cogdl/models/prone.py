@@ -52,6 +52,7 @@ class ProNE(BaseModel):
         print("spectral Pro time", t_3 - t_2)
         self.embeddings = embeddings_matrix
         list_nodes=list(G.nodes())
+        
         for vid, node in enumerate(G.nodes()):
             if np.all(self.embeddings[vid])==0:
                 lis_emb=[self.embeddings[list_nodes.index(n)]for n in G.predecessors(node)]

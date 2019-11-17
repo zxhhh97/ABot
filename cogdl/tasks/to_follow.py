@@ -77,8 +77,8 @@ def seperate_data(input_list,time_list):
     return [train_list,test_list]
 
 
-def randomly_choose_false_edges(nodes, true_edges, num):
-    true_edges_set = set(true_edges)
+def randomly_choose_false_edges(nodes, true_edges1,true_edges2, num):
+    true_edges_set = set(true_edges1+true_edges2)
     tmp_list = list()
     all_flag = False
     for _ in range(num):
@@ -121,7 +121,7 @@ def gen_node_pairs(train_data, test_data):
     #    list(training_nodes), train_data, len(valid_data)
     #)
     test_false_data = randomly_choose_false_edges(
-        list(training_nodes), train_data, len(test_data)
+        list(training_nodes), train_data,test_data, len(test_data)
     )
     return (test_true_data, test_false_data)
 

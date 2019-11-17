@@ -14,123 +14,104 @@ import pandas as pd
 import random 
 
 sys.path.append(r'./BotProject')
-from Readoffline import read_tweet
+
+from ReadOffline import read_tweet,read_graph
 from ContentSim import content_sim
+
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
-rootpath='./BotProject/pre_data'  ##
+rootpath='./BotProject/pre_data'  ## raw files
+start=time.perf_counter()
 
+## Reading files
 tw=read_tweet(rootpath) 
-G_now,G_future = tw.get_graph()
-name2node=tw.name2node
-#dic_content=tw.dic_content2tf(num_files=1,num_features=10)
-dic_content2=tw.dic_contents_sample(num_files=10)
-texts=list(dic_content2.values())
+rg=read_graph(rootpath)
+G_now,G_future = rg.G_now,rg.G_future
+name2node=rg.get_name2node()
 
-def node2ind(dic):
-    node2index={}
-    for i,k in enumerate(dic.keys()):
-        node2index[k]=i
-    return node2index
+def mk_midpath(midpath): 
+    if not osp.isdir(midpath):
+        os.makedirs(midpath)
 
-def get_dictionary():
-    dictionary = corpora.Dictionary(texts)
-    once_ids = [tokenid for tokenid, docfreq in iteritems(dictionary.dfs) if docfreq == 1]
-    dictionary.filter_tokens(once_ids)  #
-    dictionary.compactify() 
-    dictionary.save('./sample.dict') 
-    return dictionary
+midpath='./midfile'
+path_corpdict='corpus_node2ind.npy'
+mk_midpath(midpath)
 
-dictionary=get_dictionary()
-n2i=node2ind(dic_content2)
-corpus = [dictionary.doc2bow(text) for text in texts]
-corpora.MmCorpus.serialize('./corpus.mm', corpus) 
+def get_corpus_dictionary(path1='sample.dict',path2='corpus_node2ind.npy',path3='text.txt'):
+    path1=osp.join(midpath,path1)
+    path2=osp.join(midpath,path2)
+    path3=osp.join(midpath,path3)
+    if not(os.path.exists(path1) and  os.path.exists(path2) and os.path.exists(path3)):
+        dic_content=tw.dic_contents(name2node,num_files=None) ## most time consuming
+        texts=list(dic_content.values())
+        file= open(path3, 'w')  
+        for fp in texts:
+            file.write(str(fp))
+            file.write('\n')
+        file.close()
+        node2ind={}
+        for i,k in enumerate(dic_content.keys()):
+            node2ind[k]=i
+        np.save(path2,node2ind)
+        cs=content_sim(dic_content,rootpath)
+        dictionary=cs.get_dictionary(texts,min_freq=1,savepath=path1)
+    else:
+        dictionary=corpora.Dictionary.load(path1)
+        node2ind = np.load(path2,allow_pickle=True).item()
+        with open(path3, 'r') as file:
+            texts = file.readlines()
+            for i,text in enumerate(texts):
+                texts[i]=text.strip().strip("']|['").split("', '")
+    return  (texts,node2ind,dictionary)
+    ## GET Corpus 
+def get_model_corpus(dictionary,path='./corpus.mm'):
+    path1=osp.join(midpath,'corpus.mm')
+    if not os.path.exists(path1):
+        corpus = [dictionary.doc2bow(text) for text in texts]
+        corpora.MmCorpus.serialize(path1, corpus) 
+    else:
+        print('loading corpus')
+        corpus = corpora.MmCorpus(path1)
+    path2=osp.join(midpath,'./corpus_lsi.model')
+    if not os.path.exists(path2):
+        lsi = models.LsiModel(corpus, id2word=dictionary, num_topics=10)
+        corpus_lsi=lsi[corpus]
+        corpus_lsi.save(path2)
+    else:
+        corpus_lsi=models.LsiModel.load(path2)
+    return (corpus,corpus_lsi)
 
+def get_sim_index(corpus_lsi,path='./sample.index'):
+    path=osp.join(midpath,path)
+    if not os.path.exists(path):
+        print('-----begin calculating index-----')
+        index = similarities.MatrixSimilarity(corpus_lsi)
+        index.save(path)
+        print('-------end------')
+    else:
+        print('-----loading index-----')
+        index=similarities.Similarity.load(path)
+    print('-------end------')
+    return index
+    
 
-## GET Corpus 
-
-CORPUS_PATH='./corpus.mm'
-def load_corpus(dic):
-    if not os.path.isfile(CORPUS_PATH):
-        print('Creating corpus')
-        corpus=list(dic.values())
-        print('corpus created')
-        corpora.MmCorpus.serialize(CORPUS_PATH, corpus)
-    print('Loading corpus')
-    #corpus = corpora.MmCorpus(CORPUS_PATH)
-    return corpus
-
-TFIDF_PATH='./out.tfidf_model'
-def load_tfidf(corpus):
-    if not os.path.isfile(TFIDF_PATH):
-        print('Creating TF-IDF')
-        tfidf = models.TfidfModel(corpus)
-        print('TF-IDF created')
-        tfidf.save(TFIDF_PATH)
-    print('Loading TF-IDF model')
-    tfidf = models.TfidfModel.load(TFIDF_PATH)
-    return tfidf
-
-lsi = models.LsiModel(corpus, id2word=dictionary, num_topics=20)
-#tfidf=load_tfidf(corpus)
-#corpus_tfidf = tfidf[corpus]
-corpus_lsi=lsi[corpus]
-
-print('-----begin calculating index-----')
-#index = similarities.Similarity(corpus_tfidf)
-index = similarities.MatrixSimilarity(corpus_lsi)
-index.save('./sample.index')
-print('-------end------')
-
-def sims(id1,id2,dic):
-    a=n2i[id1]
-    b=n2i[id2]
-    return index[corpus_lsi[a]][b]
-
-def gen_true_edges(dic):
-    keys_list=dic.keys()
-    for n1,n2 in G_future.edges():
-        if n1 in keys_list and n2 in keys_list:
-            if dic[n1] and dic[n2]:
-                yield (n1,n2)
-
-
-def randomly_choose_false_edges(dic, true_edges, num):
-    nodes=list(dic.keys())
-    tmp_list = list()
-    all_flag = False
-    for _ in range(num):
-        trial = 0
-        while True:
-            x = nodes[random.randint(0, len(nodes) - 1)]
-            y = nodes[random.randint(0, len(nodes) - 1)]
-            trial += 1
-            if trial >= 1000:
-                all_flag = True
-                break
-            if x != y and (x, y) not in true_edges and (y, x) not in true_edges:
-                tmp_list.append((x, y))
-                break
-        if all_flag:
-            break
-    return tmp_list
+texts,node2ind,dictionary=get_corpus_dictionary()
+corpus,corpus_lsi=get_model_corpus(dictionary=dictionary)
+index=get_sim_index(corpus_lsi)
 
 print('begin compare node pairs')
-start=time.perf_counter()
-edges=list(gen_true_edges(dic_content2))
-false_edges=randomly_choose_false_edges(dic_content2, G_future.edges(), 100)
 
-print('number of pairs:',len(edges),len(false_edges))
-def sim_list(edge_list,dic,path):
-    SIMS=np.zeros((len(edge_list),3))
-    for i in range(len(edge_list)):
-        n1,n2=edge_list[i]
-        s=sims(n1,n2,dic)
-        SIMS[i,:]=[n1,n2,s]
-    result=pd.DataFrame(columns=['node1','node2','sim_content'],data=SIMS)
-    result.to_csv(path)
-    return SIMS
+true_edges=rg.gen_true_edges(node2ind)
+false_edges=rg.randomly_choose_false_edges(node2ind, num=len(true_edges))
+edges=true_edges+false_edges
+#true_edges=rg.gen_pure_edges(node2ind)
+#false_edges=rg.randomly_choose_false_edges(node2ind, num=len(true_edges))
 
-sim1=sim_list(edges,dic_content2,'./T_edges_con_sim.csv')
-sim2=sim_list(false_edges,dic_content2,'./F_edges_con_sim.csv')
+print('number of pairs:',len(true_edges),len(false_edges))
+cs=content_sim(node2ind,rootpath)
+#dfsim=cs.sim_list(edges,osp.join(midpath,'./edges_sim.csv'),0,index,corpus_lsi)
+dfsim1=cs.sim_list(true_edges,osp.join(midpath,'./T_edges_sim.csv'),1,index,corpus_lsi)
+dfsim2=cs.sim_list(false_edges,osp.join(midpath,'./F_edges_sim.csv'),0,index,corpus_lsi)
+dfsim=pd.concat([dfsim1,dfsim2],axis=0)
+dfsim.to_csv(osp.join(midpath,'./edges_sim.csv'))
 print(time.perf_counter()-start)

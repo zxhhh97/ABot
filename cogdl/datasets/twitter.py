@@ -1,11 +1,11 @@
 import sys
 import os
 import os.path as osp
-from itertools import repeat
+from itertools import repeat,product
 import numpy as np
 import scipy.sparse as sp
 import torch
-from torch_sparse import coalesce
+from torch_sparse import coalesce 
 
 import cogdl.transforms as T
 from cogdl.data import Data, Dataset, download_url, extract_gz, extract_rar
@@ -44,8 +44,9 @@ class twitter(Dataset):
 
     @property
     def raw_file_names(self):
-        #return ['higgs-social_network.edgelist.gz']
-        return ['graph_cb.txt']
+        splits = [self.name]
+        files = ['txt']
+        return ['{}.{}'.format(s, f) for s, f in product(splits, files)]
 
     @property
     def processed_file_names(self):
@@ -87,4 +88,11 @@ class DynamicNet(twitter):
         dataset, filename = 'twitter-dynamic-net','graph_cb'
         path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', dataset)
         super(DynamicNet, self).__init__(path, filename, url)
-        
+
+@register_dataset('ltc')
+class DynamicNetLTC(twitter):
+    def __init__(self):
+        url = None
+        dataset, filename = 'twitter-ltc','edge_time'
+        path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', dataset)
+        super(DynamicNetLTC, self).__init__(path, filename, url)
