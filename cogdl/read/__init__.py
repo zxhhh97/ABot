@@ -8,5 +8,5 @@ __all__ = [
     'read_txt_array',
     'read_planetoid_data',
     'read_edgelist_label_data',
-    'read_gatne_data',
+    'read_gatne_data'
 ]

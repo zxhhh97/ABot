@@ -6,7 +6,11 @@ from cogdl.data import Data
 
 class Batch(Data):
     r"""A plain old python object modeling a batch of graphs as one big
+<<<<<<< HEAD
     (disconnected) graph. With :class:`cogdl.data.Data` being the
+=======
+    (dicconnected) graph. With :class:`cogdl.data.Data` being the
+>>>>>>> dev
     base class, all its methods can also be used here.
     In addition, single graphs can be reconstructed via the assignment vector
     :obj:`batch`, which maps each node to its respective graph identifier.

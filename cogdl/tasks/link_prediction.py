@@ -267,7 +267,26 @@ class LinkPrediction(BaseTask):
         for vid, node in enumerate(G.nodes()):
             embs[node] = embeddings[vid]
 
-        
+        # epoch_iter = tqdm(range(self.max_epoch))
+        # patience = 0
+        # best_score = 0
+        # for epoch in epoch_iter:
+        #     self._train_step()
+        #     roc_auc, f1_score, pr_auc = self._test_step(self.valid_data)
+        #     epoch_iter.set_description(
+        #         f"Epoch: {epoch:03d}, ROC-AUC: {roc_auc:.4f}, F1: {f1_score:.4f}, PR-AUC: {pr_auc:.4f}"
+        #     )
+        #     if roc_auc > best_score:
+        #         best_score = roc_auc
+        #         best_model = copy.deepcopy(self.model)
+        #         patience = 0
+        #     else:
+        #         patience += 1
+        #         if patience > self.patience:
+        #             self.model = best_model
+        #             epoch_iter.close()
+        #             break
+        # roc_auc, f1_score, pr_auc = self._test_step(self.test_data)
         roc_auc, f1_score, pr_auc = evaluate(embs, self.test_data[0], self.test_data[1])
         print(
             f"Test ROC-AUC = {roc_auc:.4f}, F1 = {f1_score:.4f}, PR-AUC = {pr_auc:.4f}"

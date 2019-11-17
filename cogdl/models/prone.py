@@ -51,6 +51,7 @@ class ProNE(BaseModel):
         print("sparse NE time", t_2 - t_1)
         print("spectral Pro time", t_3 - t_2)
         self.embeddings = embeddings_matrix
+
         list_nodes=list(G.nodes())
         
         for vid, node in enumerate(G.nodes()):
